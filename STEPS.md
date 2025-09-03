@@ -641,5 +641,73 @@ app.listen(PORT, () => {
         }
       ```  
 
+---
+
+# Feature: File Upload
+
+## 1. Create `Image.js` in models folder:
+```js
+// ./models/Image.js
+const mongoose = require('mongoose');
+const ImagesSchema = new mongoose.Schema({
+  url: {
+    required: true,
+  },
+  publicId: {
+    type: String,
+    required: true,
+  },
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+}, {timestamps: true});
+
+module.exports = mongoose.model('Image', ImagesSchema);
+```
+
+### Create an account in [Cloudinary](https://cloudinary.com/)
+1. Create cloud_name, api_key, api_secret at cloudinary
+2. Save them in `.env` file
+
+
+## 2. Create `cloudinary.js` file:
+```js
+// ./config/cloudinary.js
+const cloudinary = require("cloudinary").v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+module.exports = cloudinary;
+```
+
+## 3. Create `cloudinaryHelpe.js`  file:
+```js
+// ./helpers/cloudinaryHelper.js
+const cloudinary = require('../config/cloudinary');
+
+const uploadToCloudinary = async(filePath) => {
+  try{
+    const result = await cloudinary.uploader.upload(filePath);
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+    }
+  } catch( error){
+    console.error('Error while uploading to cloudinary', error);
+    throw new Error('Error while uploading to cloudinary');
+  }
+}
+module.exports = {uploadToCloudinary;}// can have multiple helpers in this file
+```
+
+[here](https://youtu.be/MIJt9H69QVc?t=22584)
+
+
+
+
 
 
