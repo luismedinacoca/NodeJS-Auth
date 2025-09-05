@@ -1,7 +1,7 @@
 const Image = require('../models/Image');
 const {uploadToCloudinary} = require('../helpers/cloudinaryHelper'); 
 
-const uploadImage = async(req, res) => {
+const uploadImageController = async(req, res) => {
   try {
     // check i file is missing in REQ object:
     if(!req.file){
@@ -18,7 +18,7 @@ const uploadImage = async(req, res) => {
     const newlyUploadedImage = new Image({
       url,
       publicId,
-      uploadedBy: req.userInfo .userId
+      uploadedBy: req.userInfo .userId // TODO: check "userInfo" comes from authMiddleware
     })
     await newlyUploadedImage.save();
 
@@ -37,5 +37,5 @@ const uploadImage = async(req, res) => {
 }
 
 module.exports = {
-  uploadImage,
+  uploadImageController,
 }

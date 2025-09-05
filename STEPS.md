@@ -704,7 +704,49 @@ const uploadToCloudinary = async(filePath) => {
 module.exports = {uploadToCloudinary;}// can have multiple helpers in this file
 ```
 
-[here](https://youtu.be/MIJt9H69QVc?t=22584)
+## 4. Create `image-controller.js` file:
+```js
+// ./controlers/image-controller.js
+const Image = require('../models/Image');
+const {uploadToCloudinary} = require('../helpers/cloudinaryHelper'); 
+const uploadImage = async(req, res) => {
+  try {
+    // check i file is missing in REQ object:
+    if(!req.file){
+      return res.status(400).json({
+        success: false,
+        message: `File is required! Please upload any image file.`,
+      })
+    }
+    // upload to cloudinary:
+    const { url, publicId } = await uploadToCloudinary(req.file.path);
+    // store the image url and public id along with the uploaded user id in database:
+    const newlyUploadedImage = new Image({
+      url,
+      publicId,
+      uploadedBy: req.userInfo .userId
+    })
+    await newlyUploadedImage.save();
+
+    res.status(201).json({
+      success: true,
+      message: `🎉 Image uploaded successfully!`,
+      image: newlyUploadedImage,
+    })
+  } catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+module.exports = {
+  uploadImage,
+}
+```
+
+[here](https://youtu.be/MIJt9H69QVc?t=23870)
 
 
 
