@@ -1,5 +1,6 @@
 const Image = require('../models/Image');
 const {uploadToCloudinary} = require('../helpers/cloudinaryHelper'); 
+const fs = require('fs');
 
 const uploadImageController = async(req, res) => {
   try {
@@ -21,6 +22,9 @@ const uploadImageController = async(req, res) => {
       uploadedBy: req.userInfo .userId // TODO: check "userInfo" comes from authMiddleware
     })
     await newlyUploadedImage.save();
+
+    // delete the file from `uploads` folder:  ✅
+    fs.unlinkSync(req.file.path);
 
     res.status(201).json({
       success: true,

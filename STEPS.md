@@ -670,6 +670,10 @@ module.exports = mongoose.model('Image', ImagesSchema);
 ### Create an account in [Cloudinary](https://cloudinary.com/)
 1. Create cloud_name, api_key, api_secret at cloudinary
 2. Save them in `.env` file
+3. install: 
+    ```bash
+    npm i cloudinary
+    ```
 
 
 ## 2. Create `cloudinary.js` file:
@@ -709,7 +713,7 @@ module.exports = {uploadToCloudinary;}// can have multiple helpers in this file
 // ./controlers/image-controller.js
 const Image = require('../models/Image');
 const {uploadToCloudinary} = require('../helpers/cloudinaryHelper'); 
-const uploadImage = async(req, res) => {
+const uploadImageController = async(req, res) => {
   try {
     // check i file is missing in REQ object:
     if(!req.file){
@@ -742,11 +746,243 @@ const uploadImage = async(req, res) => {
   }
 }
 module.exports = {
-  uploadImage,
+  uploadImageController,
 }
 ```
 
-[here](https://youtu.be/MIJt9H69QVc?t=23870)
+## 5. Create `image-routes.js` file:
+
+### 5.1 Install `multer` :
+```
+npm i multer
+```
+### 5.2 Create `image-routes.js` file:
+```js
+// ./routes/image-routes.js
+const express = require("express");
+const authMiddleware = require("../middleware/auth-middleware");
+const adminMiddleware = require("../middleware/admin-middleware");
+
+const router = express.Router();
+
+// upload the image
+// TODO: Install "npm i multer" dependency:
+router.post(
+  "/upload",
+  authMiddleware,
+  adminMiddleware,
+  /******* 🤔 upload-middleware 🤔 *******/
+); // many middlewares which share same data between them.
+
+// to get all the images
+module.exports = router;
+```
+
+### 5.3 Create `upload-middleware.js` file:
+```js
+const multer = require("multer");
+const path = require("path");
+// 1️⃣ set out multer storage:
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/");
+  }, // destination folder
+  filename: function (req, file, cb) {
+    cb(
+      null,
+      file.fieldname + "-" + Date.now() + path.extname(file.originalname)
+    );
+  },
+});
+// 2️⃣ file filter function
+const checkFileFilter = (req, file, cb) => {
+  if(file.mimetype.startsWith('image')){
+    cb(null, true);
+  } else {
+    cb(new Error('Only images are allowed'), false);
+  }
+}
+// 3️⃣ multer middleware:
+module.exports = multer({
+  storage,
+  fileFilter: checkFileFilter,
+  limits: {
+    fileSize: 1024 * 1024 * 5, // 5MB
+  }
+})
+```
+
+### 5.4 Complete `image-routes.js` file:
+```js
+// ./routes/image-routes.js
+const express = require("express");
+const authMiddleware = require("../middleware/auth-middleware");
+const adminMiddleware = require("../middleware/admin-middleware");
+const uploadMiddleware = require("../middleware/upload-middleware");  // 👈🏽
+const { uploadImageController } = require("../controllers/image-controller");
+
+const router = express.Router();
+
+// upload the image
+// TODO: Install "npm i multer" dependency:
+router.post(
+  "/upload",
+  authMiddleware,
+  adminMiddleware,
+  uploadMiddleware.single("image"),  // 👈🏽
+  uploadImageController
+); // many middlewares which share same data between them.
+
+// to get all the images
+module.exports = router;
+```
+
+## 6. Update `server.js` file:
+```js
+require('dotenv').config();
+const express = require('express');
+const connectToDB = require('./database/db');
+const authRoutes = require('./routes/auth-routes');
+const homeRoutes = require('./routes/home-routes');
+const adminRoutes = require('./routes/admin-routes');
+const uploadImageRoutes = require('./routes/image-routes');  // 👈
+connectToDB();
+const app = express();
+const PORT = process.env.PORT || 3000;
+//middlewares:
+app.use(express.json());
+app.use('/api/auth', authRoutes);
+app.use('/api/home', homeRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/image', uploadImageRoutes);  // 👈
+app.listen(PORT, () => {
+    console.log(`Server is NOW running on port ${PORT}`);
+});
+```
+
+## 7. Testing from Postman with an `admin` role:
+- Create an admin user with **POST**.
+- Login using the admin credentials.
+- Method: **POST**
+- URL: `http://localhost:3000/api/auth/login`
+- Request headers:
+    ```json
+    {
+      "Authorization": "Bearer eyJ1c2VySWQiOiI2OGIwNzY4MTMzY..."
+    }
+    ```
+- Response:
+    ```json
+    {
+      "message": "🎉 Welcome to the home page suspiros_002 👍🏽",
+      "user": {
+        "_id": "68b0768133c928901f5ee51d",
+        "username": "suspiros_002",
+        "role": "admin"
+      }
+    }  
+-  click on **form-dat** 
+-  Key: image. & Value:  + New file from local machine
+  <img src="./img/upload-file-body-params.png">
+-  click on **Send**
+- Expected Response:
+    ```json
+    {
+      "success": true,
+      "message": "🎉 Image uploaded successfully!",
+      "image": {
+        "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1757359363/u3hbr5g76pjz6r5u7jga.png",
+        "publicId": "u3hbr5g76pjz6r5u7jga",
+        "uploadedBy": "68bf2c5982b3b42549e4bc87",
+        "_id": "68bf2d0382b3b42549e4bc8a",
+        "createdAt": "2025-09-08T19:22:43.485Z",
+        "updatedAt": "2025-09-08T19:22:43.485Z",
+        "__v": 0
+      }
+    } 
+    ```
+
+## 8. Testing from Postman with an `user` role:
+- Create an admin user with **POST**.
+- Login using the admin credentials.
+- Method: **POST**
+- URL: `http://localhost:3000/api/auth/login`
+- Request headers:
+    ```json
+    {
+      "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsI..."
+    }
+    ```
+- Response:
+    ```json
+    {
+      "message": "🎉 Welcome to the home page suspiros_001 👍🏽",
+      "user": {
+        "_id": "68b88fa696ef4c81723f9f01",
+        "username": "suspiros_001",
+        "role": "user". // 👈🏽 ✨
+      }
+    } 
+-  click on **form-dat** 
+-  Key: image. & Value:  + New file from local machine
+  <img src="./img/upload-file-body-params.png">
+-  click on **Send**
+- Status code: `403 Forbidden`
+- Expected Response:
+    ```json
+    {
+      "success": false,
+      "message": "Access denied! Admin rights required."
+    }
+    ```
+
+
+## 9. Delete the uploaded image from `/uploads` folder:
+```js
+// ./controllers/image-controller.js
+const Image = require('../models/Image');
+const {uploadToCloudinary} = require('../helpers/cloudinaryHelper'); 
+const fs = require('fs');  // 👈🏽
+const uploadImageController = async(req, res) => {
+  try {
+    // check i file is missing in REQ object:
+    if(!req.file){
+      return res.status(400).json({
+        success: false,
+        message: `File is required! Please upload any image file.`,
+      })
+    }
+    // upload to cloudinary:
+    const { url, publicId } = await uploadToCloudinary(req.file.path);
+    // store the image url and public id along with the uploaded user id in database:
+    const newlyUploadedImage = new Image({
+      url,
+      publicId,
+      uploadedBy: req.userInfo .userId // TODO: check "userInfo" comes from authMiddleware
+    })
+    await newlyUploadedImage.save();
+
+    // delete the file from `uploads` folder:  ✅
+    fs.unlinkSync(req.file.path);  // 👈🏽
+
+    res.status(201).json({
+      success: true,
+      message: `🎉 Image uploaded successfully!`,
+      image: newlyUploadedImage,
+    })
+  } catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+module.exports = {
+  uploadImageController,
+}
+```
+[here](https://youtu.be/MIJt9H69QVc?t=24191)
 
 
 

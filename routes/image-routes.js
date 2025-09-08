@@ -14,8 +14,7 @@ router.post(
   adminMiddleware,
   uploadMiddleware.single("image"),
   uploadImageController
-); // many middlewares which share data between them.
+); // many middlewares which share same data between them.
 
 // to get all the images
-
 module.exports = router;
