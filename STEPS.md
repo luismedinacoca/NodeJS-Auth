@@ -884,7 +884,8 @@ app.listen(PORT, () => {
 -  click on **form-dat** 
 -  Key: image. & Value:  + New file from local machine
   <img src="./img/upload-file-body-params.png">
--  click on **Send**
+-  click on **Send**:
+
 - Expected Response:
     ```json
     {
@@ -926,7 +927,8 @@ app.listen(PORT, () => {
 -  click on **form-dat** 
 -  Key: image. & Value:  + New file from local machine
   <img src="./img/upload-file-body-params.png">
--  click on **Send**
+-  click on **Send**:
+
 - Status code: `403 Forbidden`
 - Expected Response:
     ```json
