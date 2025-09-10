@@ -984,7 +984,182 @@ module.exports = {
   uploadImageController,
 }
 ```
-[here](https://youtu.be/MIJt9H69QVc?t=24191)
+---
+## 10. fetching Image
+### 1. Add the `fetchImagesController` in `image-controller.js` file:
+```js
+// ./controllers/image-controller.js
+const Image = require('../models/Image');
+const {uploadToCloudinary} = require('../helpers/cloudinaryHelper'); 
+const fs = require('fs');
+const uploadImageController = async(req, res) => {
+  try {
+    // check i file is missing in REQ object:
+    if(!req.file){
+      return res.status(400).json({
+        success: false,
+        message: `File is required! Please upload any image file.`,
+      })
+    }
+    // upload to cloudinary:
+    const { url, publicId } = await uploadToCloudinary(req.file.path);
+    // store the image url and public id along with the uploaded user id in database:
+    const newlyUploadedImage = new Image({
+      url,
+      publicId,
+      uploadedBy: req.userInfo .userId // TODO: check "userInfo" comes from authMiddleware
+    })
+    await newlyUploadedImage.save();
+    // delete the file from `uploads` folder: 
+    fs.unlinkSync(req.file.path);
+
+    res.status(201).json({
+      success: true,
+      message: `🎉 Image uploaded successfully!`,
+      image: newlyUploadedImage,
+    })
+  } catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+const fetchImagesController = async(req, res) => {  // 👈🏽 ✅
+  try{
+    const images = await Image.find({})
+
+    if(images) {
+      res.status(200).json({
+        success: true,
+        data: images,
+      })
+    }
+  } catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+module.exports = {
+  uploadImageController,
+  fetchImagesController,  // 👈🏽 ✅
+}
+```
+### 2. Import `fetchImagesController` in `image-routes.js`  file:
+```js
+const express = require("express");
+const authMiddleware = require("../middleware/auth-middleware");
+const adminMiddleware = require("../middleware/admin-middleware");
+const uploadMiddleware = require("../middleware/upload-middleware");
+const { uploadImageController, fetchImagesController } = require("../controllers/image-controller");  // 👈🏽 ✅
+
+const router = express.Router();
+
+// upload the image
+// TODO: Install "npm i multer" dependency:
+router.post(
+  "/upload",
+  authMiddleware,
+  adminMiddleware,
+  uploadMiddleware.single("image"),
+  uploadImageController
+); // many middlewares which share same data between them.
+
+// to get all the images => authrization required "authMiddleware"
+router.get('/get', authMiddleware, fetchImagesController);  // 👈🏽 ✅
+module.exports = router;
+```
+
+### 3. Testing from Postman:
+- No Login.
+- Method: **GET**
+- URL: `http://localhost:3000/api/image/get`
+- Response:
+    ```json
+    {
+      "success": "false",
+      "message": "Access  denied. No Token provided. Please login to continue!"
+    }
+    ```
+- <img src="./img/no_login_get_images.png">  
+---
+- Login using the `admin` credentials.
+- Method: **GET**
+- URL: `http://localhost:3000/api/image/get`
+- Response:
+  ```js
+  {
+    "success": true,
+    "data": [
+      {
+        "_id": "68bb341928e55b7e36255748",
+        "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1757099029/eyxlnikorqbrf8gmg1ty.svg",
+        "publicId": "eyxlnikorqbrf8gmg1ty",
+        "uploadedBy": "68bb33b128e55b7e36255745",
+        "createdAt": "2025-09-05T19:03:53.379Z",
+        "updatedAt": "2025-09-05T19:03:53.379Z",
+        "__v": 0
+      },
+      {
+        "_id": "68bf2d0382b3b42549e4bc8a",
+        "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1757359363/u3hbr5g76pjz6r5u7jga.png",
+        "publicId": "u3hbr5g76pjz6r5u7jga",
+        "uploadedBy": "68bf2c5982b3b42549e4bc87",
+        "createdAt": "2025-09-08T19:22:43.485Z",
+        "updatedAt": "2025-09-08T19:22:43.485Z",
+        "__v": 0
+      }
+    ]
+  }
+  ```
+- <img src="./img/get_images_login-admin.png">
+
+---
+- Upload a new Image
+- Login using the `user` credentials.
+- Method: **GET**
+- URL: `http://localhost:3000/api/image/get`
+- Response:
+  ```js
+  {
+    "success": true,
+    "data": [
+      {
+        "_id": "68bb341928e55b7e36255748",
+        "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1757099029/eyxlnikorqbrf8gmg1ty.svg",
+        "publicId": "eyxlnikorqbrf8gmg1ty",
+        "uploadedBy": "68bb33b128e55b7e36255745",
+        "createdAt": "2025-09-05T19:03:53.379Z",
+        "updatedAt": "2025-09-05T19:03:53.379Z",
+        "__v": 0
+      },
+      {
+        "_id": "68bf2d0382b3b42549e4bc8a",
+        "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1757359363/u3hbr5g76pjz6r5u7jga.png",
+        "publicId": "u3hbr5g76pjz6r5u7jga",
+        "uploadedBy": "68bf2c5982b3b42549e4bc87",
+        "createdAt": "2025-09-08T19:22:43.485Z",
+        "updatedAt": "2025-09-08T19:22:43.485Z",
+        "__v": 0
+      },
+      {
+        "_id": "68c1c2e3b0ba916d35907f5a",
+        "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1757528803/hra8t4fr2ojgleqjp5vf.png",
+        "publicId": "hra8t4fr2ojgleqjp5vf",
+        "uploadedBy": "68bf2c5982b3b42549e4bc87",
+        "createdAt": "2025-09-10T18:26:43.775Z",
+        "updatedAt": "2025-09-10T18:26:43.775Z",
+        "__v": 0
+      }
+    ]
+  }
+  ```
+
+[here](https://youtu.be/MIJt9H69QVc?t=24444)
 
 
 
