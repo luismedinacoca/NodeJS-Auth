@@ -146,7 +146,7 @@ const changePassword = async(req, res) => {
     const newHashedPassword = await bcrypt.hash(newPassword, salt);
 
     // ✅ 6. update the new password in the database:
-    user.password = newHashedPassowrd;
+    user.password = newHashedPassword;
     await user.save();
 
     // ✅ 7. send the response:
@@ -157,7 +157,7 @@ const changePassword = async(req, res) => {
 
   }catch(e){
     console.log(e);
-    res.statuss(500).json({
+    res.status(500).json({
       success: false,
       message: "Some error occured! Please try again."
     })
