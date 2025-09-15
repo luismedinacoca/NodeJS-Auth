@@ -56,7 +56,22 @@ npm i nodemon -D
 MONGO_URI=mongodb+srv://<username>:<db_password>@cluster0.1234567.mongodb.net/
 ```
 
-## 8. create `./server.js` file:
+## 8. Create and connect the database, `./database/db.js` file:
+```js
+const mongoose = require('mongoose');
+const connectToDB = async() => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('MongoDB connected successfully!');
+  } catch (error) {
+    console.log('MonogDB connection failed!');
+    process.exit(1);
+  }
+}
+module.exports = connectToDB;
+```
+
+## 9. create `./server.js` file:
 ```js
 require('dotenv').config();
 const express = require('express');
@@ -70,21 +85,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server is NOW running on port ${PORT}`);
 });
-```
-
-## 9. Need to create database, `./database/db.js` file:
-```js
-const mongoose = require('mongoose');
-const connectToDB = async() => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB connected successfully!');
-  } catch (error) {
-    console.log('MonogDB connection failed!');
-    process.exit(1);
-  }
-}
-module.exports = connectToDB;
 ```
 
 ## 10. Add `./models/User.js` file:
