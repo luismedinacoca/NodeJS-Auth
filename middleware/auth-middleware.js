@@ -9,7 +9,7 @@ const authMiddleware = (req, res, next) => {
   console.log("🔐 Token is: ", token);
 
   if(!token){
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       message: `Access  denied. No Token provided. Please login to continue!`
     })
