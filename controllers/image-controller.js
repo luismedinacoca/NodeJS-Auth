@@ -71,10 +71,14 @@ const fetchImagesController = async(req, res) => {
 \***************************************/
 const deleteImageController = async(req, res) => {
   try{
+    // ✅ 1. Get imageId and UserId from authMiddleware.
     const getCurrentIdOfImageToBeDeleted = req.params.id;
     const userId = req.userInfo.userId;
 
+    // ✅ 2. Find the image in the database.
     const image = await Image.findById(getCurrentIdOfImageToBeDeleted);
+
+    // ✅ 3. Check if the image is found.
     if(!image){
       return res.status(400).json({
         success: false,
@@ -82,7 +86,7 @@ const deleteImageController = async(req, res) => {
       })
     }
     
-    // check if this image is uploaded by the current user who is trying to delete this image:
+    // ✅  4. Verify if this image is uploaded by the current user who is trying to delete this image:
     if(image.uploadedBy.toString() !== userId){
       return res.status(403).json({
         success: false,
@@ -90,13 +94,13 @@ const deleteImageController = async(req, res) => {
       })
     }
 
-    // delete this image first from your cloudinary storage:
+    // ✅ 5. Delete this image first from your cloudinary storage:
     await cloudinary.uploader.destroy(image.publicId);
 
-    // delete this image from MongoDB database:
+    // ✅ 6. Delete this image from MongoDB database:
     await Image.findByIdAndDelete(getCurrentIdOfImageToBeDeleted);
 
-    // Json response:
+    // ✅ 7. Json response:
     res.status(200).json({
       success: true,
       message: `🎉 This ${image.url} image has been deleted successfully!`,
