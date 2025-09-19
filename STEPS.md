@@ -1409,6 +1409,351 @@ module.exports = router;
     - <img src="./img/changePassword-004-PasswordChanged-successfully.png">  
 
 
+## 12. Delete Image
+
+### 1. Open `image-controller.js` file:
+```js
+// ./controllers/image-controller.js
+const Image = require('../models/Image');
+const {uploadToCloudinary} = require('../helpers/cloudinaryHelper'); 
+const fs = require('fs');
+const cloudinary = require('../config/cloudinary');
+
+// ******* Upload IMAGE Controller *******
+const uploadImageController = async(req, res) => {
+  try {
+    // check i file is missing in REQ object:
+    if(!req.file){
+      return res.status(400).json({
+        success: false,
+        message: `File is required! Please upload any image file.`,
+      })
+    }
+
+    // upload to cloudinary:
+    const { url, publicId } = await uploadToCloudinary(req.file.path);
+
+    // store the image url and public id along with the uploaded user id in database:
+    const newlyUploadedImage = new Image({
+      url,
+      publicId,
+      uploadedBy: req.userInfo .userId // TODO: check "userInfo" comes from authMiddleware
+    })
+    await newlyUploadedImage.save();
+
+    // delete the file from `uploads` folder:  ✅
+    fs.unlinkSync(req.file.path);
+
+    res.status(201).json({
+      success: true,
+      message: `🎉 Image uploaded successfully!`,
+      image: newlyUploadedImage,
+    })
+  } catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+
+// ******* Fetch IMAGES Controller *******
+const fetchImagesController = async(req, res) => {
+  try{
+    const images = await Image.find({})
+
+    if(images) {
+      res.status(200).json({
+        success: true,
+        data: images,
+      })
+    }
+  } catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+
+// ******* Delete IMAGE Controller *******. // 👈🏽 ✅
+const deleteImageController = async(req, res) => {
+  try{
+    // ✅ 1. Get imageId and UserId from authMiddleware.
+    const getCurrentIdOfImageToBeDeleted = req.params.id;
+    const userId = req.userInfo.userId;
+
+    // ✅ 2. Find the image in the database.
+    const image = await Image.findById(getCurrentIdOfImageToBeDeleted);
+
+    // ✅ 3. Check if the image is found.
+    if(!image){
+      return res.status(400).json({
+        success: false,
+        message: "This images was not found!"
+      })
+    }
+    
+    // ✅  4. Verify if this image is uploaded by the current user who is trying to delete this image:
+    if(image.uploadedBy.toString() !== userId){
+      return res.status(403).json({
+        success: false,
+        message: "😥 You are not authorized to delete this image because you haven't upload it!"
+      })
+    }
+
+    // ✅ 5. Delete this image first from your cloudinary storage:
+    await cloudinary.uploader.destroy(image.publicId);
+
+    // ✅ 6. Delete this image from MongoDB database:
+    await Image.findByIdAndDelete(getCurrentIdOfImageToBeDeleted);
+
+    // ✅ 7. Json response:
+    res.status(200).json({
+      success: true,
+      message: `🎉 This ${image.url} image has been deleted successfully!`,
+    })
+
+  }catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+
+module.exports = {
+  uploadImageController,
+  fetchImagesController,
+  deleteImageController, // 👈🏽 ✅
+}
+```
+
+### 2. Open `image-routes.js` file and update it with `deleteImageController`:
+```js
+// ./routes/image-routes.js
+const express = require("express");
+const authMiddleware = require("../middleware/auth-middleware");
+const adminMiddleware = require("../middleware/admin-middleware");
+const uploadMiddleware = require("../middleware/upload-middleware");
+const { uploadImageController, fetchImagesController, deleteImageController } = require("../controllers/image-controller"); // 👈🏽 ✅
+
+const router = express.Router();
+
+// upload the image
+// TODO: Install "npm i multer" dependency:
+router.post(
+  "/upload",
+  authMiddleware,
+  adminMiddleware,
+  uploadMiddleware.single("image"),
+  uploadImageController
+); // many middlewares which share same data between them. /api/image/upload 
+
+// to get all the images => authorization required "authMiddleware"
+router.get('/get', authMiddleware, fetchImagesController);
+
+// delete image route => authorization required "authMiddleware"
+router.delete('/:id', authMiddleware, deleteImageController); // 👈🏽 ✅  // /api/image/delete/:id
+
+module.exports = router;
+```
+
+### 3. Testing from Postman:
+
+#### _**Test 01: Delete an image with an invalid token**_
+1. Login with an existent user:
+    - Method: **POST**
+    - URL: `http://localhost:3000/api/auth/login`
+    - Body:
+        ```json
+        {
+          "username": "suspiros_001",
+          "password": "Test!001"
+        }
+        ```
+    - Response:
+        ```json
+        {
+          "success": true,
+          "message": "Logged in successfully!",
+          "accessToken": "eyJhbGciOiJIUzI1NiI..."
+        }
+        ```
+---
+
+2. Upload an image:
+    - Method: **POST**
+    - URL: `http://localhost:3000/api/image/upload`
+    - Authorization: Bearer `{{accessToken}}`
+    - Body:
+      - Form-data
+      - image: `image_file_path`
+    - Response:
+        ```json
+        {
+          "success": true,
+          "message": "🎉 Image uploaded successfully!",
+          "image": {
+            "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1758223399/soz9iockemvb6wkmjo7p.png",
+            "publicId": "soz9iockemvb6wkmjo7p",
+            "uploadedBy": "68cc59aa838aedd4c6172283",
+            "_id": "68cc5c28838aedd4c6172287",
+            "createdAt": "2025-09-18T19:23:20.181Z",
+            "updatedAt": "2025-09-18T19:23:20.181Z",
+            "__v": 0
+          }
+        }
+        ```
+---
+3. Wait until accessToken is not valid anymore:
+    - Method: **DELETE**
+    - URL: `http://localhost:3000/api/image/68cc5c28838aedd4c6172287`
+    - Response:
+        ```json
+        {
+          "success": false,
+          "message": "Access  denied. No Token provided. Please login to continue!"
+        }
+        ```
+
+#### _**Test 02: Delete an image with another user:**_
+1. Login with an existent user:
+  - Method: **POST**
+  - URL: `http://localhost:3000/api/auth/login`
+  - Body:
+      ```json
+      {
+        "username": "suspiros_001",
+        "password": "Test!001"
+      }
+      ```
+  - Response:
+      ```json
+      {
+        "success": true,
+        "message": "Logged in successfully!",
+        "accessToken": "eyJhbGciOiJIUzI1NiI..."
+      }
+      ```
+---
+
+2. Upload an image:
+  - Method: **POST**
+  - URL: `http://localhost:3000/api/image/upload`
+  - Authorization: Bearer `{{accessToken}}`
+  - Body:
+    - Form-data
+    - image: `image_file_path`
+  - Response:
+      ```json
+      {
+        "success": true,
+        "message": "🎉 Image uploaded successfully!",
+        "image": {
+          "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1723293589/sozockemvjob69iwkm7p.png",
+          "publicId": "sozockemvjob69iwkm7p",
+          "uploadedBy": "68cc59aa838aedd4c6172283",
+          "_id": "68d18b28838aedd422c5c687",
+          "createdAt": "2025-09-18T19:23:20.181Z",
+          "updatedAt": "2025-09-18T19:23:20.181Z",
+          "__v": 0
+        }
+      }
+      ```
+---
+
+3. Login with another existent user:
+  - Method: **POST**
+  - URL: `http://localhost:3000/api/auth/login`
+  - Body:
+      ```json
+      {
+        "username": "suspiros_002",
+        "password": "Test!002"
+      }
+      ```
+  - Response:
+      ```json
+      {
+        "success": true,
+        "message": "Logged in successfully!",
+        "accessToken": "eyJiJIGcUzI1NiI..."
+      }
+      ```
+---
+
+4. Delete the image with another user:
+  - Method: **DELETE**
+  - URL: `http://localhost:3000/api/image/68d18b28838aedd422c5c687`
+  - Response:
+      ```json
+      {
+        "success": false,
+        "message": "😥 You are not authorized to delete this image because you haven't upload it!"
+      }
+      ```
+
+#### _**Test 03: Delete an image with correct user:**_
+
+1. Login with an existent user:
+  - Method: **POST**
+  - URL: `http://localhost:3000/api/auth/login`
+  - Body:
+      ```json
+      {
+        "username": "suspiros_001",
+        "password": "Test!001"
+      }
+      ```
+  - Response:
+      ```json
+      {
+        "success": true,
+        "message": "Logged in successfully!",
+        "accessToken": "eyJhbGciOiJIUzI1NiIs.."
+      }
+      ```
+---
+
+2. Upload an image:
+  - Method: **POST**
+  - URL: `http://localhost:3000/api/image/upload`
+  - Authorization: Bearer `{{accessToken}}`
+  - Body:
+    - Form-data
+    - image: `image_file_path`
+  - Response:
+      ```json
+      {
+        "success": true,
+        "message": "🎉 Image uploaded successfully!",
+        "image": {
+          "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1758311533/tpzucxhvoye4dibj0iis.png",
+          "publicId": "tpzucxhvoye4dibj0iis",
+          "uploadedBy": "68cdb43450edaad2e433447f",
+          "_id": "68cdb46e50edaad2e4334482",
+          "createdAt": "2025-09-19T19:52:14.176Z",
+          "updatedAt": "2025-09-19T19:52:14.176Z",
+          "__v": 0
+        }
+      }
+      ```
+---
+
+4. Delete the image with valid user:
+  - Method: **DELETE**
+  - URL: `http://localhost:3000/api/image/68cdb46e50edaad2e4334482`
+  - Response:
+      ```json
+      {
+        "success": true,
+        "message": "🎉 This https://res.cloudinary.com/darlwqmqo/image/upload/v1758311533/tpzucxhvoye4dibj0iis.png image has been deleted successfully!"
+      }
+      ```
 
 [here](https://youtu.be/MIJt9H69QVc?t=24444)
 
