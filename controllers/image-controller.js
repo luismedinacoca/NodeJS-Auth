@@ -49,11 +49,45 @@ const uploadImageController = async(req, res) => {
 \***************************************/
 const fetchImagesController = async(req, res) => {
   try{
-    const images = await Image.find({})
+    // ✅ 1. get all page/limit/skip from query:
+    const page = parseInt(req.query.page) || 1; //[1, 2, 3, 4,...] for clicking on next/prev button
+    const limit = parseInt(req.query.limit) || 5; // it shows how many images(json data) will be shown in each page
+    const skip = (page - 1) * limit; // it shows the number of images to skip in order to show the next/prev page
+
+    // ✅ 2. Sorting images by createdAt in asc/desc order:
+    const sortBy = req.query.sortBy || 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc'? 1 : -1;
+    const totalImages = await Image.countDocuments(); // it shows the total number of images in the database
+    const totalPages = Math.ceil(totalImages / limit); // it shows the total number of pages in the database
+
+    // ✅ 3. Sorting images by "createdAt" or eithher another criteria in asc/desc order:
+    const sortObj = {};
+    sortObj[sortBy] = sortOrder;
+
+    // ✅ 4. Fetching images from the database according to the criteria:
+    const images = await Image.find({}).sort(sortObj).skip(skip).limit(limit);
+    /*
+    For instance:
+        sortObj["createdAt"] = -1; 
+        sortObj = {createdAt: -1}
+
+    Image.find({}).sort(sortObj)
+    That means:
+    ➡️ "Bring me the documents "Image" collection sorted by the createdAt field in descending order (-1)."
+
+    const images = await Image.find()
+                              .sort(sortObj)   // order the results (e.g. newest first, oldest first, or by name, or either createdAt or updatedAt)
+                              .skip(skipNum)   // skip some items (useful to jump to page 2, 3, etc.)
+                              .limit(limitNum) // limit how many items to return (e.g. 5 per page)
+    👉 “Find images from the database, order them, skip some, and only return a fixed number — perfect for pagination.”
+     */
 
     if(images) {
       res.status(200).json({
         success: true,
+        currentPage: page,          // 👈🏽 ✅
+        totalPages: totalPages,     // 👈🏽 ✅
+        totalImages: totalImages,   // 👈🏽 ✅
         data: images,
       })
     }
