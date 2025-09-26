@@ -1755,6 +1755,243 @@ module.exports = router;
       }
       ```
 
+## 13. Sorting Images by any criteria an amount(limit):
+```js
+const Image = require('../models/Image');
+const {uploadToCloudinary} = require('../helpers/cloudinaryHelper'); 
+const fs = require('fs');
+const cloudinary = require('../config/cloudinary');
+
+/******* Upload IMAGE Controller *******/
+const uploadImageController = async(req, res) => {
+  try {
+    // check i file is missing in REQ object:
+    if(!req.file){
+      return res.status(400).json({
+        success: false,
+        message: `File is required! Please upload any image file.`,
+      })
+    }
+    // upload to cloudinary:
+    const { url, publicId } = await uploadToCloudinary(req.file.path);
+
+    // store the image url and public id along with the uploaded user id in database:
+    const newlyUploadedImage = new Image({
+      url,
+      publicId,
+      uploadedBy: req.userInfo .userId // TODO: check "userInfo" comes from authMiddleware
+    })
+    await newlyUploadedImage.save();
+
+    // delete the file from `uploads` folder:
+    fs.unlinkSync(req.file.path);
+
+    res.status(201).json({
+      success: true,
+      message: `🎉 Image uploaded successfully!`,
+      image: newlyUploadedImage,
+    })
+  } catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+
+/******* fetch IMAGES Controller *******/
+const fetchImagesController = async(req, res) => {
+  try{
+    // ✅ 1. get all page/limit/skip from query:
+    const page = parseInt(req.query.page) || 1; //[1, 2, 3, 4,...] for clicking on next/prev button
+    const limit = parseInt(req.query.limit) || 5; // it shows how many images(json data) will be shown in each page
+    const skip = (page - 1) * limit; // it shows the number of images to skip in order to show the next/prev page
+
+    // ✅ 2. Sorting images by createdAt in asc/desc order:
+    const sortBy = req.query.sortBy || 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc'? 1 : -1;
+    const totalImages = await Image.countDocuments(); // it shows the total number of images in the database
+    const totalPages = Math.ceil(totalImages / limit); // it shows the total number of pages in the database
+
+    // ✅ 3. Sorting images by "createdAt" or eithher another criteria in asc/desc order:
+    const sortObj = {};
+    sortObj[sortBy] = sortOrder;
+
+    // ✅ 4. Fetching images from the database according to the criteria:
+    const images = await Image.find({}).sort(sortObj).skip(skip).limit(limit);
+
+    if(images) {
+      res.status(200).json({
+        success: true,
+        currentPage: page,          // 👈🏽 ✅
+        totalPages: totalPages,     // 👈🏽 ✅
+        totalImages: totalImages,   // 👈🏽 ✅
+        data: images,
+      })
+    }
+  } catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+
+/******* delete IMAGE Controller *******/
+const deleteImageController = async(req, res) => {
+  try{
+    const getCurrentIdOfImageToBeDeleted = req.params.id;
+    const userId = req.userInfo.userId;
+    const image = await Image.findById(getCurrentIdOfImageToBeDeleted);
+    if(!image){
+      return res.status(400).json({
+        success: false,
+        message: "This images was not found!"
+      })
+    }
+    if(image.uploadedBy.toString() !== userId){
+      return res.status(403).json({
+        success: false,
+        message: "😥 You are not authorized to delete this image because you haven't upload it!"
+      })
+    }
+    await cloudinary.uploader.destroy(image.publicId);
+    await Image.findByIdAndDelete(getCurrentIdOfImageToBeDeleted);
+    res.status(200).json({
+      success: true,
+      message: `🎉 This ${image.url} image has been deleted successfully!`,
+    })
+  }catch(error){
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: `Something went wrong! Please try again.`,
+    })
+  }
+}
+module.exports = {
+  uploadImageController,
+  fetchImagesController,
+  deleteImageController,
+}
+```
+
+### 1. Explanation:
+```js
+/*
+const sortObj = {} // an empty objet
+
+For instance:
+    sortObj["createdAt"] = -1; 
+    sortObj = {createdAt: -1} // object created with a dynamic criteeria.
+
+Image.find({}).sort(sortObj)
+That means:
+➡️ "Bring me the documents "Image" collection sorted by the 'createdAt' field in descending order (-1)."
+
+const images = await Image.find()
+                          .sort(sortObj)   // 1️⃣
+                          .skip(skipNum)   // 2️⃣
+                          .limit(limitNum) // 3️⃣
+
+1️⃣: order the results (e.g. newest first, oldest first, or by name, or either createdAt or updatedAt). The "sort() method" in mongodb/mongoose needs an object for the sorting criteria.
+
+2️⃣: skip some items (useful to jump to page 2, 3, etc.)
+
+3️⃣: limit how many items to return (e.g. 5 per page)
+
+👉 “Find images from the database, order them, skip some, and only return a fixed number — perfect for pagination.”
+*/
+```
+### 2. Testing from Postman:
+1. Login with an existent user
+  - Method: **POST**
+  - URL: `http://localhost:3000/api/auth/login`
+  - Body:
+      ```json
+      {
+        "username": "suspiros_001",
+        "password": "Test!001"
+      }
+      ```
+  - Response:
+      ```json
+      {
+        "success": true,
+        "message": "Logged in successfully!",
+        "accessToken": "eyJhbGciOiJIUzI1NiIs.."
+      }
+      ```
+---
+
+2. List all images:
+  - Method: **GET**
+  - URL: `http://localhost:3000/api/image/get`
+  - Authorization: Bearer `{{accessToken}}`
+  - Query Params:
+    ```json
+    {
+      "page": 2,
+      "sortBy": "createdAt",
+      "sortOrder": "asc",
+      "limit": 2
+    }
+    ```
+  - Complete Query Params:
+    ```
+    http://localhost:3000/api/image/get?page=2&sortBy=createdAt&sortOrder=asc&limit=2
+    ```
+  - Response:
+      ```json
+      {
+        "success": true,
+        "currentPage": 2,
+        "totalPages": 6,
+        "totalImages": 11,
+        "data": [
+          {
+            "_id": "68d6d9bada6d0fe0c290725c",
+            "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1758910906/jfvauixa67sselxjenby.png",
+            "publicId": "jfvauixa67sselxjenby",
+            "uploadedBy": "68d6d7fcda6d0fe0c2907250",
+            "createdAt": "2025-09-26T18:21:46.461Z",
+            "updatedAt": "2025-09-26T18:21:46.461Z",
+            "__v": 0
+          },
+          {
+            "_id": "68d6d9d2da6d0fe0c290725e",
+            "url": "https://res.cloudinary.com/darlwqmqo/image/upload/v1758910930/eihbiy77hpculveeje1l.png",
+            "publicId": "eihbiy77hpculveeje1l",
+            "uploadedBy": "68d6d7fcda6d0fe0c2907250",
+            "createdAt": "2025-09-26T18:22:10.973Z",
+            "updatedAt": "2025-09-26T18:22:10.973Z",
+            "__v": 0
+          }
+        ]
+      }
+      ```
+
+### 3. Proofs:
+1. URL: "http://localhost:3000/api/image/get?page=1&sortBy=createdAt&sortOrder=asc&limit=12"
+2. Total images: 11
+3. Total Pages: 1
+4. Curent Page: 1
+<img src="./img/Pagination_Request-QueryParams.png">
+---
+1. URL: 
+    * "http://localhost:3000/api/image/get?page=1&sortBy=createdAt&sortOrder=asc&limit=6"
+    * "http://localhost:3000/api/image/get?page=2&sortBy=createdAt&sortOrder=asc&limit=6"
+2. Total images: 11
+3. Total Pages: 2
+4. Curent Page: 1 & 2
+
+<img src="./img/pagination_Request-QuesryParams-completed.png">
+---
+
+
+
 [here](https://youtu.be/MIJt9H69QVc?t=24444)
 
 
